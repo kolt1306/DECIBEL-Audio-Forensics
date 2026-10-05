@@ -1,4 +1,18 @@
 import { useEffect, useRef, useState } from "react";
+import { encodeWav } from "../lib/wav";
+
+type Capture = {
+  stream: MediaStream;
+  context: AudioContext;
+  source: MediaStreamAudioSourceNode;
+  analyser: AnalyserNode;
+  processor: AudioWorkletNode;
+  chunks: Float32Array[];
+  timer: ReturnType<typeof setInterval> | null;
+  flushTimer: ReturnType<typeof setTimeout> | null;
+  stopping: boolean;
+};
+
 export function useRecorder(
   onFile: (file: File) => void,
   onError: (message: string) => void,
@@ -7,47 +21,80 @@ export function useRecorder(
   const [starting, setStarting] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
-  const resources = useRef<{
+  const resources = useRef<Capture | null>(null);
+  const opening = useRef<{
     stream: MediaStream;
-    context: AudioContext;
-    recorder: MediaRecorder;
-    timer: ReturnType<typeof setInterval> | null;
+    context: AudioContext | null;
   } | null>(null);
   const mounted = useRef(true);
   const pending = useRef(false);
   const callbacks = useRef({ onFile, onError });
   callbacks.current = { onFile, onError };
   const cleanup = () => {
+    const initializing = opening.current;
+    opening.current = null;
+    if (initializing) {
+      initializing.stream.getTracks().forEach((t) => t.stop());
+      if (initializing.context)
+        void initializing.context.close().catch(() => {});
+    }
     const r = resources.current;
     if (!r) return;
-    if (r.timer) clearInterval(r.timer);
-    r.stream.getTracks().forEach((t) => t.stop());
-    void r.context.close();
     resources.current = null;
+    if (r.timer) clearInterval(r.timer);
+    if (r.flushTimer) clearTimeout(r.flushTimer);
+    if (!r.stopping) r.stream.getTracks().forEach((t) => t.stop());
+    r.processor.port.onmessage = null;
+    r.processor.onprocessorerror = null;
+    r.processor.port.close();
+    r.source.disconnect();
+    r.analyser.disconnect();
+    r.processor.disconnect();
+    r.chunks.length = 0;
+    void r.context.close().catch(() => {});
+  };
+  const reset = () => {
+    if (mounted.current) {
+      setRecording(false);
+      setStarting(false);
+      setAnalyser(null);
+    }
+  };
+  const fail = () => {
+    cleanup();
+    reset();
+    if (mounted.current)
+      callbacks.current.onError(
+        "Microphone capture failed. Try recording again.",
+      );
   };
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      const r = resources.current;
-      if (r?.recorder.state === "recording") r.recorder.stop();
       cleanup();
     };
   }, []);
   const stop = () => {
     const r = resources.current;
-    if (r?.recorder.state === "recording") r.recorder.stop();
-    cleanup();
-    if (mounted.current) {
-      setRecording(false);
-      setAnalyser(null);
+    if (!r || r.stopping) return;
+    if (r.timer) clearInterval(r.timer);
+    // Release the mic immediately; wait for the worklet's final PCM before encoding.
+    r.stream.getTracks().forEach((t) => t.stop());
+    r.stopping = true;
+    r.flushTimer = setTimeout(fail, 3000);
+    try {
+      r.processor.port.postMessage("stop");
+    } catch {
+      fail();
     }
   };
   const start = async () => {
     if (pending.current || resources.current) return;
     if (
       !navigator.mediaDevices?.getUserMedia ||
-      typeof MediaRecorder === "undefined"
+      typeof AudioContext === "undefined" ||
+      typeof AudioWorkletNode === "undefined"
     ) {
       callbacks.current.onError(
         "Recording needs a supported browser on HTTPS or localhost.",
@@ -59,70 +106,78 @@ export function useRecorder(
     let stream: MediaStream | null = null;
     let context: AudioContext | null = null;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1 },
+      });
       if (!mounted.current) {
         stream.getTracks().forEach((t) => t.stop());
         return;
       }
+      opening.current = { stream, context: null };
       context = new AudioContext();
+      opening.current.context = context;
       await context.resume();
+      await context.audioWorklet.addModule(
+        import.meta.env.BASE_URL + "pcm-recorder.js",
+      );
       if (!mounted.current) {
-        stream.getTracks().forEach((t) => t.stop());
-        await context.close();
+        cleanup();
         return;
       }
+      const source = context.createMediaStreamSource(stream);
       const node = context.createAnalyser();
       node.fftSize = 2048;
-      context.createMediaStreamSource(stream).connect(node);
-      const mimeType = [
-        "audio/webm;codecs=opus",
-        "audio/mp4",
-        "audio/ogg;codecs=opus",
-      ].find((t) => MediaRecorder.isTypeSupported(t));
-      const recorder = new MediaRecorder(
+      const processor = new AudioWorkletNode(context, "decibel-pcm-recorder");
+      const r: Capture = {
         stream,
-        mimeType ? { mimeType } : undefined,
-      );
-      const chunks: BlobPart[] = [];
-      recorder.ondataavailable = (event) => {
-        if (event.data.size) chunks.push(event.data);
+        context,
+        source,
+        analyser: node,
+        processor,
+        chunks: [],
+        timer: null,
+        flushTimer: null,
+        stopping: false,
       };
-      recorder.onstop = () => {
-        if (mounted.current) {
-          const mime = recorder.mimeType || "audio/webm";
-          const extension = mime.includes("mp4")
-            ? "m4a"
-            : mime.includes("ogg")
-              ? "ogg"
-              : "webm";
-          callbacks.current.onFile(
-            new File(chunks, `capture-${Date.now()}.${extension}`, {
-              type: mime,
-            }),
-          );
+      resources.current = r;
+      opening.current = null;
+      processor.port.onmessage = ({
+        data,
+      }: MessageEvent<Float32Array | string>) => {
+        if (resources.current !== r) return;
+        if (data instanceof Float32Array) {
+          r.chunks.push(data);
+        } else if (data === "stopped" && r.stopping) {
+          try {
+            const wav = encodeWav(r.chunks, r.context.sampleRate);
+            const file = new File([wav], "capture-" + Date.now() + ".wav", {
+              type: "audio/wav",
+            });
+            cleanup();
+            reset();
+            if (mounted.current) callbacks.current.onFile(file);
+          } catch {
+            fail();
+          }
         }
       };
-      recorder.onerror = () => {
-        stop();
-        callbacks.current.onError(
-          "Microphone capture failed. Try recording again.",
-        );
-      };
+      processor.onprocessorerror = fail;
+      source.connect(node);
+      source.connect(processor);
+      // Connected output keeps processing active; the worklet outputs silence.
+      processor.connect(context.destination);
       const begin = performance.now();
-      resources.current = { stream, context, recorder, timer: null };
-      recorder.start(250);
       setElapsed(0);
       setAnalyser(node);
       setRecording(true);
-      resources.current.timer = setInterval(() => {
+      r.timer = setInterval(() => {
         const seconds = (performance.now() - begin) / 1000;
         setElapsed(Math.min(seconds, 600));
         if (seconds >= 600) stop();
       }, 100);
     } catch (error) {
-      stream?.getTracks().forEach((t) => t.stop());
-      if (context) void context.close();
       cleanup();
+      reset();
       if (mounted.current)
         callbacks.current.onError(
           error instanceof DOMException && error.name === "NotAllowedError"

@@ -33,7 +33,7 @@ These additions improve the surrounding system. They do not retrain the classifi
 - CUDA-capable NVIDIA infrastructure and matching CUDA-enabled torch, torchvision and torchaudio packages.
 - Hugging Face access to `google/gemma-4-e4b-it` and a read token in `HF_TOKEN`.
 - The audio tower has **304,824,608 parameters**: 1,219,298,432 bytes (1.136 GiB) in FP32 or 609,649,216 bytes (0.568 GiB) in FP16/BF16, excluding activations, buffers and CUDA workspaces. It fits on the verified 8 GB RTX 4060 Laptop GPU. DECIBEL loads `Gemma4AudioModel` directly from the checkpoint on `cuda:0`; it never constructs or retains the language/vision model and does not disk-offload inference. The shared Hugging Face checkpoint still requires about 16 GB of disk cache. No quantization is used.
-- FFmpeg **and FFprobe** on `PATH` for WebM/Opus browser capture, AAC/M4A and other codecs unsupported by libsndfile. WAV, FLAC and supported MP3 use soundfile directly.
+- Live microphone capture uses AudioWorklet and produces mono 16-bit PCM WAV at the browser's actual sample rate; DECIBEL recordings decode through soundfile without FFmpeg. FFmpeg **and FFprobe** on `PATH` remain optional for externally uploaded WebM/Opus, AAC/M4A and other codecs unsupported by libsndfile. WAV, FLAC and supported MP3 use soundfile directly.
 
 CPU-only installations can serve the application API and validate audio, but cannot classify. Gemma/model-loader dependencies remain necessary for actual inference. Transformers is pinned to Git commit `10502571152db764f244791b7054481a7f629801` because the notebook installs from Git for Gemma 4 support. This pin makes source reproducible; runtime validation is recorded below.
 
