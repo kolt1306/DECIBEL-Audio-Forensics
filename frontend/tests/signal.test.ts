@@ -42,17 +42,16 @@ it("redraws a static reduced-motion waveform after resize and cleans its frame",
     return next;
   });
   vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
-  const view = render(
-    createElement(SignalField, {
-      peaks: [0.1, 0.2, 0.3],
-      analyser: null,
-      analyzing: false,
-      dragging: false,
-      phone: false,
-      color: "#d5ee8c",
-      progress: 0,
-    }),
-  );
+  const props = {
+    peaks: [0.1, 0.2, 0.3],
+    analyser: null,
+    analyzing: false,
+    dragging: false,
+    phone: false,
+    color: "#d5ee8c",
+    progress: 0,
+  };
+  const view = render(createElement(SignalField, props));
   const run = () => {
     const [id, callback] = Array.from(frames.entries())[0];
     frames.delete(id);
@@ -61,6 +60,12 @@ it("redraws a static reduced-motion waveform after resize and cleans its frame",
   run();
   expect(context.clearRect).toHaveBeenCalledTimes(1);
   expect(frames.size).toBe(0);
+  view.rerender(createElement(SignalField, { ...props, progress: 0.5 }));
+  expect(frames.size).toBe(0);
+  expect(
+    view.container.querySelector<HTMLElement>(".waveform-playhead")?.style
+      .transform,
+  ).toBe("translateX(50%)");
   resize();
   run();
   expect(context.clearRect).toHaveBeenCalledTimes(2);

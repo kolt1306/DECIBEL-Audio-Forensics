@@ -1,0 +1,112 @@
+{
+  "verdict": "deepfake",
+  "risk": "high",
+  "real_probability": 0.07699999999999996,
+  "fake_probability": 0.923,
+  "fake_percentage": 92.30000000000001,
+  "duration_seconds": 12,
+  "phone_mode": false,
+  "analysis_id": "visual-qa-high",
+  "segments": [
+    {
+      "index": 0,
+      "start_seconds": 0,
+      "end_seconds": 4,
+      "status": "analyzed",
+      "fake_probability": 0.50765,
+      "real_probability": 0.49234999999999995,
+      "risk": "medium",
+      "reason": null
+    },
+    {
+      "index": 1,
+      "start_seconds": 3,
+      "end_seconds": 7,
+      "status": "analyzed",
+      "fake_probability": 0.5999500000000001,
+      "real_probability": 0.4000499999999999,
+      "risk": "medium",
+      "reason": null
+    },
+    {
+      "index": 2,
+      "start_seconds": 6,
+      "end_seconds": 10,
+      "status": "analyzed",
+      "fake_probability": 0.923,
+      "real_probability": 0.07699999999999996,
+      "risk": "high",
+      "reason": null
+    },
+    {
+      "index": 3,
+      "start_seconds": 9,
+      "end_seconds": 12,
+      "status": "analyzed",
+      "fake_probability": 0.7845500000000001,
+      "real_probability": 0.21544999999999992,
+      "risk": "high",
+      "reason": null
+    }
+  ],
+  "suspicious_regions": [
+    {
+      "start_seconds": 3,
+      "end_seconds": 10,
+      "risk": "high",
+      "peak_fake_probability": 0.923
+    }
+  ],
+  "peak_fake_probability": 0.923,
+  "peak_segment_start": 6,
+  "peak_segment_end": 10,
+  "statistics": {
+    "mean": 0.6461,
+    "median": 0.5999500000000001,
+    "maximum": 0.923,
+    "minimum": 0.50765,
+    "standard_deviation": 0.09230000000000001
+  },
+  "timeline_distribution": {
+    "low": 0.3,
+    "medium": 0.4,
+    "high": 0.3
+  },
+  "analyzed_seconds": 12,
+  "unanalyzed_seconds": 0,
+  "quality": {
+    "quality": "good",
+    "warnings": [],
+    "duration_seconds": 12,
+    "original_sample_rate": 16000,
+    "channels": 1,
+    "rms": 0.12,
+    "peak_amplitude": 0.6,
+    "silence_ratio": 0.03,
+    "clipping_ratio": 0,
+    "dc_offset": 0.0001,
+    "dynamic_range_db": 38,
+    "zero_crossing_rate": 0.026,
+    "spectral_centroid_hz": 1840,
+    "spectral_bandwidth_hz": 1200,
+    "usable_signal_seconds": 11.6
+  },
+  "metadata": {
+    "timestamp": "2026-10-05T09:00:00Z",
+    "model_id": "Gemma / QA fixture",
+    "model_fingerprint": "visual-qa-only",
+    "classifier_sha256": "QA fixture — no model inference",
+    "sample_rate": 16000,
+    "segment_duration_seconds": 4,
+    "segment_overlap_seconds": 1,
+    "runtime_precision": "float32",
+    "aggregation": "max"
+  },
+  "timings": {
+    "decode_ms": 8,
+    "preprocessing_ms": 12,
+    "inference_ms": 410,
+    "total_ms": 430
+  },
+  "disclaimer": "VISUAL QA FIXTURE. Synthetic test data, not a real classification."
+}
