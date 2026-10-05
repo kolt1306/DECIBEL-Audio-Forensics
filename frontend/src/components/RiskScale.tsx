@@ -1,7 +1,13 @@
-import { motion } from "motion/react";
+import { useRef } from "react";
+import { motion, useInView, useReducedMotion } from "motion/react";
+import { reveal } from "../lib/motion";
 export default function RiskScale({ probability }: { probability: number }) {
+  const reduced = useReducedMotion();
+  const scale = useRef<HTMLDivElement>(null);
+  const visible = useInView(scale, { once: true });
   return (
     <div
+      ref={scale}
       className="risk-scale"
       aria-label={`Deepfake probability ${(probability * 100).toFixed(1)} percent. Low below 40, medium from 40, high from 70.`}
     >
@@ -18,9 +24,11 @@ export default function RiskScale({ probability }: { probability: number }) {
         ))}
         <motion.div
           className="risk-marker"
-          initial={{ left: "0%" }}
-          animate={{ left: `${probability * 100}%` }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          initial={{ left: reduced ? `${probability * 100}%` : "0%" }}
+          animate={{
+            left: visible || reduced ? `${probability * 100}%` : "0%",
+          }}
+          transition={{ ...reveal, duration: reduced ? 0 : 0.8 }}
         >
           <span>▼</span>
         </motion.div>

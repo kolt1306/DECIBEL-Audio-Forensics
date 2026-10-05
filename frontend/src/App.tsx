@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import SignalAtmosphere from "./components/SignalAtmosphere";
+import SignalCursor from "./components/SignalCursor";
+import ProbabilityReadout from "./components/ProbabilityReadout";
+import { reveal, disclose } from "./lib/motion";
 import {
   ArrowDown,
   ArrowUpRight,
@@ -41,6 +45,8 @@ const verdicts = {
   deepfake: "Deepfake detected",
 };
 export default function App() {
+  const reduced = useReducedMotion();
+  const entrance = reduced ? { duration: 0 } : reveal;
   const [signal, setSignal] = useState<SignalAudio | null>(null);
   const signalRef = useRef<SignalAudio | null>(null);
   const [phone, setPhone] = useState(false);
@@ -244,28 +250,41 @@ export default function App() {
       ? "#e68b79"
       : result?.risk === "medium"
         ? "#e3bb72"
-        : "#d5ee8c";
+        : result
+          ? "#a9d7b4"
+          : recorder.recording
+            ? "#e68b79"
+            : "#cad8df";
   const status = recorder.recording
     ? "RECORDING"
-    : loading
-      ? "DECODING SIGNAL"
-      : analyzing
-        ? cancelling
-          ? "CANCELLING AFTER SEGMENT"
-          : job?.state === "queued"
-            ? "QUEUED FOR INFERENCE"
-            : "ANALYSIS IN PROGRESS"
-        : result
-          ? "CLASSIFICATION COMPLETE"
-          : signal
-            ? "SIGNAL READY"
-            : dragging
-              ? "RELEASE TO LOAD"
-              : "AWAITING SIGNAL";
+    : recorder.starting
+      ? "OPENING MICROPHONE"
+      : loading
+        ? "DECODING SIGNAL"
+        : analyzing
+          ? cancelling
+            ? "CANCELLING AFTER SEGMENT"
+            : job?.state === "queued"
+              ? "QUEUED FOR INFERENCE"
+              : "ANALYSIS IN PROGRESS"
+          : result
+            ? "CLASSIFICATION COMPLETE"
+            : signal
+              ? "SIGNAL READY"
+              : dragging
+                ? "RELEASE TO LOAD"
+                : "AWAITING SIGNAL";
   return (
     <main style={{ "--signal": color } as React.CSSProperties}>
+      <SignalAtmosphere />
+      <SignalCursor />
       <header className="masthead">
-        <a className="wordmark" href="/" aria-label="DECIBEL home">
+        <a
+          className="wordmark"
+          href="/"
+          aria-label="DECIBEL home"
+          data-magnetic
+        >
           <AudioLines size={24} />
           <span>DECIBEL</span>
         </a>
@@ -286,10 +305,12 @@ export default function App() {
         className="intro"
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
+        transition={entrance}
       >
         <div>
-          <p className="eyebrow">AUDIO FORENSICS / INSTRUMENT 01</p>
+          <p className="eyebrow">
+            AUDIO AUTHENTICITY FORENSICS / INSTRUMENT 01
+          </p>
           <h1>
             Listen beyond
             <br />
@@ -310,6 +331,7 @@ export default function App() {
           <button
             onClick={() => setShowMethod((v) => !v)}
             className="text-link"
+            data-magnetic
             aria-expanded={showMethod}
           >
             Behind the analysis <ArrowUpRight size={15} />
@@ -317,7 +339,7 @@ export default function App() {
         </div>
       </motion.section>
       <section
-        className={`instrument ${dragging ? "drag-active" : ""} ${analyzing ? "scanning" : ""}`}
+        className={`instrument ${dragging ? "drag-active" : ""} ${analyzing ? "scanning" : ""} ${recorder.recording ? "recording" : ""} ${signal ? "has-signal" : ""}`}
         aria-label="Audio analysis instrument"
         onDragEnter={(e) => {
           e.preventDefault();
@@ -364,6 +386,14 @@ export default function App() {
             phone={phone}
             color={color}
             progress={progress}
+            duration={signal?.duration}
+            onSeek={(seconds) => {
+              if (!player.current || !signal) return;
+              regionRef.current = null;
+              setRegion(null);
+              player.current.currentTime = seconds;
+              setProgress(seconds / signal.duration);
+            }}
           />
           {!signal && !recorder.recording && !loading && (
             <div className="empty-overlay">
@@ -376,13 +406,6 @@ export default function App() {
               <span className="target-bracket">]</span>
             </div>
           )}
-          {result && signal && (
-            <SegmentTimeline
-              segments={result.segments}
-              duration={signal.duration}
-              onSeek={seekRegion}
-            />
-          )}
           {analyzing && (
             <div className="scan-caption">
               {job?.segments_total
@@ -390,7 +413,7 @@ export default function App() {
                 : job?.state === "queued"
                   ? "QUEUED / WAITING FOR GPU"
                   : "DECODING & PREPARING"}{" "}
-              <span>/ SCAN MOTION IS VISUAL ONLY</span>
+              <span>/ SIGNAL EXAMINATION</span>
             </div>
           )}
           {recorder.recording && (
@@ -412,6 +435,14 @@ export default function App() {
             );
           })}
         </div>
+        {result && signal && (
+          <SegmentTimeline
+            key={`${result.analysis_id}-${result.phone_mode}`}
+            segments={result.segments}
+            duration={signal.duration}
+            onSeek={seekRegion}
+          />
+        )}
         <div className="signal-meta">
           <span>
             {signal ? (
@@ -450,6 +481,7 @@ export default function App() {
             />
             <button
               className="upload-button"
+              data-magnetic
               disabled={busy}
               onClick={() => input.current?.click()}
             >
@@ -460,6 +492,7 @@ export default function App() {
             <span className="or">or</span>
             <button
               className={`record-button ${recorder.recording ? "active" : ""}`}
+              data-magnetic
               disabled={analyzing || loading || recorder.starting}
               onClick={() => {
                 setError("");
@@ -642,8 +675,9 @@ export default function App() {
               </button>
             )}
             <motion.button
-              whileTap={{ scale: 0.985 }}
+              whileTap={reduced ? undefined : { scale: 0.985 }}
               className="analyze-button"
+              data-magnetic
               disabled={!signal || busy}
               onClick={() => {
                 void analyze();
@@ -716,6 +750,7 @@ export default function App() {
             initial={{ opacity: 0, y: -5 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
+            transition={reduced ? { duration: 0 } : disclose}
           >
             <span>SIGNAL INTERRUPTED</span>
             <p>{error}</p>
@@ -742,8 +777,10 @@ export default function App() {
           <motion.section
             key="result"
             className={`result ${result.risk}`}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={reduced ? false : { opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.15 }}
+            transition={entrance}
             aria-live="polite"
           >
             <div className="result-heading">
@@ -762,10 +799,7 @@ export default function App() {
             </div>
             <div className="result-measurement">
               <div className="probability">
-                <strong>
-                  {result.fake_percentage.toFixed(1)}
-                  <small>%</small>
-                </strong>
+                <ProbabilityReadout value={result.fake_percentage} />
                 <span>
                   PEAK SEGMENT
                   <br />
@@ -793,6 +827,7 @@ export default function App() {
             key="idle"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
+            transition={entrance}
           >
             <span>
               CAPTURE <ChevronRight size={11} /> EXAMINE{" "}
@@ -826,6 +861,7 @@ export default function App() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
+            transition={reduced ? { duration: 0 } : disclose}
           >
             <div>
               <p className="eyebrow">THE METHOD</p>

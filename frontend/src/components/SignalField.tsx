@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useReducedMotion } from "motion/react";
+import { time } from "../lib/audio";
 type Props = {
   peaks?: number[];
   analyser: AnalyserNode | null;
@@ -8,6 +9,8 @@ type Props = {
   phone: boolean;
   color: string;
   progress: number;
+  duration?: number;
+  onSeek?: (seconds: number) => void;
 };
 export default function SignalField({
   peaks,
@@ -17,18 +20,26 @@ export default function SignalField({
   phone,
   color,
   progress,
+  duration = 0,
+  onSeek,
 }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const pointer = useRef(0.5);
+  const bounds = useRef<DOMRect | null>(null);
+  const probe = useRef<HTMLDivElement>(null);
+  const hoverFrame = useRef(0);
   const reduced = useReducedMotion();
+  useEffect(() => () => cancelAnimationFrame(hoverFrame.current), []);
   useEffect(() => {
     const el = canvas.current!;
-    const ctx = el.getContext("2d")!;
+    const ctx = el.getContext("2d");
+    if (!ctx) return;
     let frame = 0;
     let width = 0;
     let height = 0;
     const resize = () => {
       const box = el.getBoundingClientRect();
+      bounds.current = box;
       width = box.width;
       height = box.height;
       const dpr = Math.min(devicePixelRatio, 2);
@@ -40,9 +51,11 @@ export default function SignalField({
     };
     const live = new Uint8Array(analyser?.fftSize || 2048);
     const draw = (now: number) => {
+      frame = 0;
+      if (document.hidden || width <= 0 || height <= 0) return;
       ctx.clearRect(0, 0, width, height);
       const mid = height * 0.5;
-      ctx.strokeStyle = "#282d26";
+      ctx.strokeStyle = "#232e38";
       ctx.lineWidth = 1;
       for (let x = 0; x < width; x += width / 12) {
         ctx.beginPath();
@@ -56,7 +69,7 @@ export default function SignalField({
         ctx.lineTo(width, y);
         ctx.stroke();
       }
-      ctx.strokeStyle = "#535b48";
+      ctx.strokeStyle = "#435664";
       ctx.setLineDash([2, 5]);
       ctx.beginPath();
       ctx.moveTo(0, mid);
@@ -65,7 +78,7 @@ export default function SignalField({
       ctx.setLineDash([]);
       if (analyser) analyser.getByteTimeDomainData(live);
       ctx.strokeStyle = color;
-      ctx.lineWidth = peaks || analyser ? 1.7 : 1;
+      ctx.lineWidth = 1;
       const count = Math.floor(width / 3);
       for (let i = 0; i < count; i++) {
         const x = (i / count) * width;
@@ -98,44 +111,102 @@ export default function SignalField({
             0.42 *
             (phone && !peaks && !analyser ? 0.85 : 1),
         );
-        ctx.globalAlpha = peaks || analyser ? 0.88 : 0.55;
+        ctx.globalAlpha = peaks || analyser ? 0.85 : 0.4;
         ctx.beginPath();
         ctx.moveTo(x, mid - a);
         ctx.lineTo(x, mid + a);
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      const marker = analyzing ? (reduced ? 0.5 : (now / 3200) % 1) : progress;
-      if (analyzing || progress > 0) {
+      const marker = reduced ? 0.5 : (now / 3200) % 1;
+      if (analyzing) {
+        ctx.globalAlpha = 0.06;
+        ctx.fillStyle = color;
+        ctx.fillRect(Math.max(0, marker * width - 45), 0, 45, height);
+        ctx.globalAlpha = 1;
         ctx.fillStyle = color;
         ctx.fillRect(marker * width, 0, 1.5, height);
         ctx.fillRect(marker * width - 3, 0, 7, 5);
       }
-      if (!reduced || analyser) frame = requestAnimationFrame(draw);
+      // Loaded audio stays static; its playback marker moves independently in CSS.
+      if (analyser || (!reduced && (analyzing || !peaks)))
+        frame = requestAnimationFrame(draw);
     };
     const observer = new ResizeObserver(resize);
     observer.observe(el);
+    const visibility = () => {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      if (!document.hidden) frame = requestAnimationFrame(draw);
+    };
+    document.addEventListener("visibilitychange", visibility);
     resize();
     return () => {
       observer.disconnect();
+      document.removeEventListener("visibilitychange", visibility);
       cancelAnimationFrame(frame);
     };
-  }, [peaks, analyser, analyzing, dragging, phone, color, progress, reduced]);
+  }, [peaks, analyser, analyzing, dragging, phone, color, reduced]);
   return (
-    <canvas
-      ref={canvas}
-      onPointerMove={(e) => {
-        const r = e.currentTarget.getBoundingClientRect();
-        pointer.current = (e.clientX - r.left) / r.width;
-      }}
-      aria-label={
-        analyser
-          ? "Live microphone amplitude"
-          : peaks
-            ? "Waveform of your complete recording"
-            : "Illustrative idle signal pattern"
-      }
-      role="img"
-    />
+    <>
+      <canvas
+        ref={canvas}
+        className={peaks ? "seekable-waveform" : ""}
+        onClick={(e) => {
+          if (!peaks || analyzing || !onSeek) return;
+          const box = e.currentTarget.getBoundingClientRect();
+          onSeek(
+            Math.max(0, Math.min(1, (e.clientX - box.left) / box.width)) *
+              duration,
+          );
+        }}
+        onPointerMove={(e) => {
+          const r = bounds.current;
+          if (!r || !r.width) return;
+          pointer.current = Math.max(
+            0,
+            Math.min(1, (e.clientX - r.left) / r.width),
+          );
+          if (peaks && !analyzing && !hoverFrame.current) {
+            hoverFrame.current = requestAnimationFrame(() => {
+              hoverFrame.current = 0;
+              if (!probe.current) return;
+              probe.current.style.transform = `translateX(${pointer.current * r.width}px)`;
+              probe.current.style.opacity = "1";
+              const label = probe.current.firstElementChild as HTMLElement;
+              label.textContent = time(pointer.current * duration);
+              label.style.left = pointer.current > 0.85 ? "auto" : "8px";
+              label.style.right = pointer.current > 0.85 ? "8px" : "auto";
+            });
+          }
+        }}
+        onPointerLeave={() => {
+          cancelAnimationFrame(hoverFrame.current);
+          hoverFrame.current = 0;
+          if (probe.current) probe.current.style.opacity = "0";
+        }}
+        aria-label={
+          analyser
+            ? "Live microphone amplitude"
+            : peaks
+              ? "Waveform of your complete recording"
+              : "Illustrative idle signal pattern"
+        }
+        role="img"
+      />
+      {peaks && (
+        <div ref={probe} className="waveform-probe" aria-hidden="true">
+          <span />
+        </div>
+      )}
+      {peaks && !analyzing && progress > 0 && (
+        <div className="waveform-guides" aria-hidden="true">
+          <div
+            className="waveform-playhead"
+            style={{ transform: `translateX(${progress * 100}%)` }}
+          />
+        </div>
+      )}
+    </>
   );
 }
