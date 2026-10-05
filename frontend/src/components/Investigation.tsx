@@ -1,5 +1,14 @@
-import { useState } from "react";
-import { ArrowUpRight, Copy, Download, Play } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { disclose, reveal } from "../lib/motion";
+import {
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  Copy,
+  Download,
+  Play,
+} from "lucide-react";
 import { time } from "../lib/audio";
 import type { Analysis, Comparison } from "../lib/api";
 type Props = {
@@ -24,6 +33,13 @@ export default function Investigation({
   onError,
 }: Props) {
   const [copied, setCopied] = useState(false);
+  const [technical, setTechnical] = useState(false);
+  const reduced = useReducedMotion();
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2200);
+    return () => clearTimeout(timer);
+  }, [copied]);
   const exportJSON = () => {
     const report = comparison
       ? { product: "DECIBEL", ...comparison, disclaimer: result.disclaimer }
@@ -48,16 +64,25 @@ export default function Investigation({
     }
   };
   return (
-    <section className="investigation" aria-label="Audio investigation details">
+    <motion.section
+      className="investigation"
+      aria-label="Audio investigation details"
+      initial={reduced ? false : { opacity: 0, y: 10 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.1 }}
+      transition={reduced ? { duration: 0 } : reveal}
+    >
       <div className="investigation-top">
         <span className="eyebrow">03 / SIGNAL INVESTIGATION</span>
         <div>
           <button
+            className={copied ? "copied" : ""}
+            aria-live="polite"
             onClick={() => {
               void copySummary();
             }}
           >
-            <Copy size={13} />
+            {copied ? <Check size={13} /> : <Copy size={13} />}
             {copied ? "Copied" : "Copy summary"}
           </button>
           <button onClick={exportJSON}>
@@ -217,115 +242,137 @@ export default function Investigation({
           </div>
         </div>
       )}
-      <details className="technical-details">
-        <summary>
+      <section className="technical-details">
+        <button
+          className="technical-toggle"
+          aria-expanded={technical}
+          aria-controls="technical-report"
+          onClick={() => setTechnical((v) => !v)}
+        >
+          <ChevronDown size={14} />
           Technical analysis{" "}
           <span>
             {result.segments.filter((s) => s.status === "analyzed").length} /{" "}
             {result.segments.length} SEGMENTS
           </span>
-        </summary>
-        <dl>
-          <dt>Analysis ID</dt>
-          <dd>{result.analysis_id}</dd>
-          <dt>Timestamp</dt>
-          <dd>{result.metadata.timestamp}</dd>
-          <dt>Model</dt>
-          <dd>{result.metadata.model_id}</dd>
-          <dt>Model fingerprint</dt>
-          <dd>{result.metadata.model_fingerprint}</dd>
-          <dt>Classifier SHA-256</dt>
-          <dd>{result.metadata.classifier_sha256}</dd>
-          <dt>Input</dt>
-          <dd>
-            {result.quality.original_sample_rate} Hz / {result.quality.channels}{" "}
-            channels → {result.metadata.sample_rate} Hz mono
-          </dd>
-          <dt>Windows / overlap</dt>
-          <dd>
-            {result.metadata.segment_duration_seconds}s /{" "}
-            {result.metadata.segment_overlap_seconds}s
-          </dd>
-          <dt>Precision / channel</dt>
-          <dd>
-            {result.metadata.runtime_precision} /{" "}
-            {result.phone_mode ? "16 → 8 → 16 kHz" : "standard"}
-          </dd>
-          <dt>Aggregation</dt>
-          <dd>
-            Maximum segment probability; an application-level summary, not a new
-            trained confidence.
-          </dd>
-          <dt>Decode / preprocessing</dt>
-          <dd>
-            {result.timings.decode_ms.toFixed(1)} /{" "}
-            {result.timings.preprocessing_ms.toFixed(1)} ms
-          </dd>
-          <dt>Inference / total</dt>
-          <dd>
-            {result.timings.inference_ms.toFixed(1)} /{" "}
-            {result.timings.total_ms.toFixed(1)} ms
-          </dd>
-          <dt>DC offset / dynamic range</dt>
-          <dd>
-            {result.quality.dc_offset.toFixed(5)} /{" "}
-            {result.quality.dynamic_range_db.toFixed(1)} dB
-          </dd>
-          <dt>Zero crossing / spectral centroid</dt>
-          <dd>
-            {result.quality.zero_crossing_rate.toFixed(4)} /{" "}
-            {result.quality.spectral_centroid_hz.toFixed(1)} Hz
-          </dd>
-          <dt>Spectral bandwidth</dt>
-          <dd>{result.quality.spectral_bandwidth_hz.toFixed(1)} Hz</dd>
-          <dt>Signal-energy estimate</dt>
-          <dd>
-            {result.quality.usable_signal_seconds.toFixed(2)}s (energy
-            heuristic, not speech recognition)
-          </dd>
-        </dl>
-        <div
-          className="segment-table"
-          role="region"
-          aria-label="Segment predictions"
-        >
-          <table>
-            <thead>
-              <tr>
-                <th>SEGMENT</th>
-                <th>TIME RANGE</th>
-                <th>FAKE PROB.</th>
-                <th>RISK</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.segments.map((s) => (
-                <tr key={s.index}>
-                  <td>{String(s.index + 1).padStart(2, "0")}</td>
-                  <td>
-                    <button
-                      onClick={() => onRegion(s.start_seconds, s.end_seconds)}
-                    >
-                      {time(s.start_seconds)}—{time(s.end_seconds)}
-                    </button>
-                  </td>
-                  <td>
-                    {s.fake_probability === null
-                      ? "—"
-                      : `${(s.fake_probability * 100).toFixed(1)}%`}
-                  </td>
-                  <td>
-                    {s.status === "skipped"
-                      ? "SKIPPED / SILENT"
-                      : s.risk?.toUpperCase()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
+        </button>
+        <AnimatePresence initial={false}>
+          {technical && (
+            <motion.div
+              id="technical-report"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={reduced ? { duration: 0 } : disclose}
+              style={{ overflow: "hidden" }}
+            >
+              <dl>
+                <dt>Analysis ID</dt>
+                <dd>{result.analysis_id}</dd>
+                <dt>Timestamp</dt>
+                <dd>{result.metadata.timestamp}</dd>
+                <dt>Model</dt>
+                <dd>{result.metadata.model_id}</dd>
+                <dt>Model fingerprint</dt>
+                <dd>{result.metadata.model_fingerprint}</dd>
+                <dt>Classifier SHA-256</dt>
+                <dd>{result.metadata.classifier_sha256}</dd>
+                <dt>Input</dt>
+                <dd>
+                  {result.quality.original_sample_rate} Hz /{" "}
+                  {result.quality.channels} channels →{" "}
+                  {result.metadata.sample_rate} Hz mono
+                </dd>
+                <dt>Windows / overlap</dt>
+                <dd>
+                  {result.metadata.segment_duration_seconds}s /{" "}
+                  {result.metadata.segment_overlap_seconds}s
+                </dd>
+                <dt>Precision / channel</dt>
+                <dd>
+                  {result.metadata.runtime_precision} /{" "}
+                  {result.phone_mode ? "16 → 8 → 16 kHz" : "standard"}
+                </dd>
+                <dt>Aggregation</dt>
+                <dd>
+                  Maximum segment probability; an application-level summary, not
+                  a new trained confidence.
+                </dd>
+                <dt>Decode / preprocessing</dt>
+                <dd>
+                  {result.timings.decode_ms.toFixed(1)} /{" "}
+                  {result.timings.preprocessing_ms.toFixed(1)} ms
+                </dd>
+                <dt>Inference / total</dt>
+                <dd>
+                  {result.timings.inference_ms.toFixed(1)} /{" "}
+                  {result.timings.total_ms.toFixed(1)} ms
+                </dd>
+                <dt>DC offset / dynamic range</dt>
+                <dd>
+                  {result.quality.dc_offset.toFixed(5)} /{" "}
+                  {result.quality.dynamic_range_db.toFixed(1)} dB
+                </dd>
+                <dt>Zero crossing / spectral centroid</dt>
+                <dd>
+                  {result.quality.zero_crossing_rate.toFixed(4)} /{" "}
+                  {result.quality.spectral_centroid_hz.toFixed(1)} Hz
+                </dd>
+                <dt>Spectral bandwidth</dt>
+                <dd>{result.quality.spectral_bandwidth_hz.toFixed(1)} Hz</dd>
+                <dt>Signal-energy estimate</dt>
+                <dd>
+                  {result.quality.usable_signal_seconds.toFixed(2)}s (energy
+                  heuristic, not speech recognition)
+                </dd>
+              </dl>
+              <div
+                className="segment-table"
+                role="region"
+                aria-label="Segment predictions"
+              >
+                <table>
+                  <thead>
+                    <tr>
+                      <th>SEGMENT</th>
+                      <th>TIME RANGE</th>
+                      <th>FAKE PROB.</th>
+                      <th>RISK</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.segments.map((s) => (
+                      <tr key={s.index}>
+                        <td>{String(s.index + 1).padStart(2, "0")}</td>
+                        <td>
+                          <button
+                            onClick={() =>
+                              onRegion(s.start_seconds, s.end_seconds)
+                            }
+                          >
+                            {time(s.start_seconds)}—{time(s.end_seconds)}
+                          </button>
+                        </td>
+                        <td>
+                          {s.fake_probability === null
+                            ? "—"
+                            : `${(s.fake_probability * 100).toFixed(1)}%`}
+                        </td>
+                        <td>
+                          {s.status === "skipped"
+                            ? "SKIPPED / SILENT"
+                            : s.risk?.toUpperCase()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </section>
       <p className="report-disclaimer">{result.disclaimer}</p>
-    </section>
+    </motion.section>
   );
 }
