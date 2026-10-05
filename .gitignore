@@ -19,3 +19,8 @@ Thumbs.db
 .idea/
 .vscode/
 backend/.test-venv/
+
+# Local diagnostics and temporary PCM fixtures
+gpu-verification*.json
+capture-diagnostics*.json
+*.f32

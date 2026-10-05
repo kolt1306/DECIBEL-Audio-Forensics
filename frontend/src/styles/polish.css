@@ -1214,3 +1214,20 @@ footer {
     display: none;
   }
 }
+
+.capture-diagnostics {
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.capture-diagnostics summary {
+  cursor: pointer;
+}
+.capture-diagnostics pre {
+  overflow: auto;
+  max-height: 220px;
+}
+.capture-diagnostics a {
+  color: inherit;
+  text-decoration: underline;
+}

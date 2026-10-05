@@ -102,7 +102,7 @@ def decode_recording(data: bytes) -> DecodedAudio:
         except AudioError:
             raise
         except Exception:
-            raise AudioError('Cannot decode this recording. Try WAV, MP3 or FLAC; browser recordings require FFmpeg.', 'UNSUPPORTED_AUDIO') from None
+            raise AudioError('Cannot decode this recording. Try WAV, MP3 or FLAC; compressed formats may require FFmpeg.', 'UNSUPPORTED_AUDIO') from None
     decode_ms = (perf_counter() - begin) * 1000
     original_sr = original_sr if 'original_sr' in locals() else sr
     begin = perf_counter()

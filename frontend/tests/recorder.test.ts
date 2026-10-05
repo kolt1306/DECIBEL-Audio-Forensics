@@ -7,7 +7,20 @@ afterEach(() => vi.unstubAllGlobals());
 function mediaSetup(addModule = vi.fn().mockResolvedValue(undefined)) {
   const stop = vi.fn();
   const close = vi.fn().mockResolvedValue(undefined);
-  const stream = { getTracks: () => [{ stop }] } as unknown as MediaStream;
+  const track = {
+    stop,
+    getSettings: () => ({
+      channelCount: 1,
+      sampleRate: 48000,
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    }),
+  };
+  const stream = {
+    getTracks: () => [track],
+    getAudioTracks: () => [track],
+  } as unknown as MediaStream;
   const nodes: { disconnect: ReturnType<typeof vi.fn> }[] = [];
   const processors: Processor[] = [];
   const makeNode = () => {
@@ -271,4 +284,27 @@ describe("microphone lifecycle", () => {
     );
     hook.unmount();
   });
+});
+
+it("keeps measured capture settings attached to the WAV with sample-derived duration", async () => {
+  const { captureFor } = await import("../src/lib/microphone");
+  mediaSetup();
+  const file = vi.fn();
+  const hook = renderHook(() => useRecorder(file, vi.fn()));
+  await act(async () => {
+    await hook.result.current.start();
+  });
+  act(() => hook.result.current.stop());
+  expect(captureFor(file.mock.calls[0][0])).toMatchObject({
+    settings: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    },
+    wavSampleRate: 48000,
+    audioContextSampleRate: 48000,
+    frames: 2,
+    durationSeconds: 2 / 48000,
+  });
+  hook.unmount();
 });

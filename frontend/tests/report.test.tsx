@@ -84,3 +84,53 @@ it("keeps diagnostics available behind accessible disclosure and acknowledges co
   );
   expect(writeText.mock.calls[0][0]).toContain("92.3%");
 });
+
+it("exports browser warnings separately while preserving saturated classifier scores", async () => {
+  let blob: Blob | undefined;
+  vi.stubGlobal("URL", {
+    createObjectURL: (value: Blob) => {
+      blob = value;
+      return "blob:report";
+    },
+    revokeObjectURL: vi.fn(),
+  });
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  const result = {
+    ...fixture,
+    fake_probability: 1,
+    fake_percentage: 100,
+    real_probability: 4.2727716476e-8,
+  } as Analysis;
+  const capture = {
+    requested: { echoCancellation: false },
+    settings: { echoCancellation: true },
+    relaxedConstraints: [],
+    warnings: ["Browser processing enabled"],
+  };
+  const view = render(
+    <MotionConfig reducedMotion="always">
+      <Investigation
+        result={result}
+        capture={capture}
+        comparison={null}
+        onMode={vi.fn()}
+        onRegion={vi.fn()}
+        onError={vi.fn()}
+      />
+    </MotionConfig>,
+  );
+  expect(
+    view.getByRole("list", { name: "Browser capture warnings" }).textContent,
+  ).toContain("Browser processing enabled");
+  fireEvent.click(view.getByRole("button", { name: "Export JSON" }));
+  const contents = await new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsText(blob!);
+  });
+  expect(JSON.parse(contents)).toEqual({
+    product: "DECIBEL",
+    ...result,
+    browser_capture: capture,
+  });
+});

@@ -11,8 +11,10 @@ import {
 } from "lucide-react";
 import { time } from "../lib/audio";
 import type { Analysis, Comparison } from "../lib/api";
+import type { MicrophoneCapture } from "../lib/microphone";
 type Props = {
   result: Analysis;
+  capture?: MicrophoneCapture;
   comparison: Comparison | null;
   onMode: (result: Analysis) => void;
   onRegion: (start: number, end: number, play?: boolean) => void;
@@ -27,6 +29,7 @@ const warnings: Record<string, string> = {
 };
 export default function Investigation({
   result,
+  capture,
   comparison,
   onMode,
   onRegion,
@@ -44,8 +47,11 @@ export default function Investigation({
     const report = comparison
       ? { product: "DECIBEL", ...comparison, disclaimer: result.disclaimer }
       : { product: "DECIBEL", ...result };
+    const evidence = capture ? { ...report, browser_capture: capture } : report;
     const url = URL.createObjectURL(
-      new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }),
+      new Blob([JSON.stringify(evidence, null, 2)], {
+        type: "application/json",
+      }),
     );
     const a = document.createElement("a");
     a.href = url;
@@ -146,6 +152,16 @@ export default function Investigation({
           <p className="quality-purpose">
             Recording suitability, separate from authenticity.
           </p>
+          {!!capture?.warnings.length && (
+            <ul
+              className="quality-warnings"
+              aria-label="Browser capture warnings"
+            >
+              {capture.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          )}
           {result.quality.warnings.length ? (
             <ul className="quality-warnings">
               {result.quality.warnings.map((w) => (
@@ -153,7 +169,7 @@ export default function Investigation({
               ))}
             </ul>
           ) : (
-            <p className="quiet-copy">No input-quality warnings.</p>
+            <p className="quiet-copy">No decoded-signal quality warnings.</p>
           )}
           <div className="quality-metrics">
             <span>

@@ -51,3 +51,19 @@ unmasked mean over time
 TrueVoice classifier head
   ↓
 real / fake probabilities
+
+```
+
+### Live microphone capture
+
+DECIBEL captures mono PCM with AudioWorklet and writes signed 16-bit WAV at the actual browser AudioContext sample rate. Generated WAVs decode without FFmpeg. Capture requires HTTPS or localhost and microphone permission. It requests echo cancellation, noise suppression and automatic gain control off where supported, checks actual track settings, and reports enabled/unverifiable processing separately from input quality and authenticity.
+
+Open **Microphone capture settings** to inspect settings or save the exact WAV. JSON exports preserve probabilities and add browser capture metadata. Result headings describe **model suspicion**; even 100.0% is a model estimate, not proof.
+
+The supplied known-real user recording remains a classifier false positive in reference-equivalent FP32 inference. No live DSP before/after improvement is claimed. See [microphone measurements and limitations](MICROPHONE_VERIFICATION.md) and [GPU runtime verification](GPU_VERIFICATION.md).
+
+An opt-in scalar-only diagnostic tool is available:
+
+```sh
+python backend/scripts/diagnose_capture.py capture.wav reference.wav --api http://127.0.0.1:8000 --duration-crops > capture-diagnostics.json
+```

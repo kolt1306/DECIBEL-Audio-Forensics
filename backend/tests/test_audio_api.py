@@ -86,3 +86,26 @@ def test_cors_is_restricted():
     rejected = client.options('/api/analyze', headers={'Origin': 'https://untrusted.example', 'Access-Control-Request-Method': 'POST'})
     assert accepted.headers['access-control-allow-origin'] == 'http://localhost:5173'
     assert 'access-control-allow-origin' not in rejected.headers
+
+
+@pytest.mark.parametrize('rate', [16000, 44100, 48000, 96000])
+def test_browser_pcm16_wav_decodes_without_ffmpeg(monkeypatch, rate):
+    import struct
+    import subprocess
+    from backend.app.audio import decode_recording
+    # Layout matches the browser encoder, including an incomplete worklet chunk.
+    # This tone validates bytes/resampling only, never classifier accuracy.
+    frames = rate * 3 + 37
+    pcm = np.rint(voice_signal(frames / rate, rate)[:frames] * 32767).astype('<i2').tobytes()
+    header = struct.pack('<4sI4s4sIHHIIHH4sI', b'RIFF', 36 + len(pcm), b'WAVE', b'fmt ',
+        16, 1, 1, rate, rate * 2, 2, 16, b'data', len(pcm))
+    def forbidden(*args, **kwargs):
+        raise AssertionError('PCM WAV must not depend on FFmpeg or FFprobe')
+    monkeypatch.setattr(subprocess, 'run', forbidden)
+    decoded = decode_recording(header + pcm)
+    assert decoded.original_sample_rate == rate and decoded.channels == 1
+    assert len(decoded.samples) == int(np.ceil(frames * 16000 / rate))
+    assert decoded.samples.dtype == np.float32
+    assert np.isfinite(decoded.samples).all()
+    if rate == 16000:
+        np.testing.assert_array_equal(decoded.samples, np.frombuffer(pcm, dtype='<i2').astype(np.float32) / 32768)

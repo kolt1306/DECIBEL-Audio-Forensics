@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { encodeWav } from "../lib/wav";
+import { openMicrophone, rememberCapture } from "../lib/microphone";
 
 type Capture = {
   stream: MediaStream;
@@ -106,9 +107,8 @@ export function useRecorder(
     let stream: MediaStream | null = null;
     let context: AudioContext | null = null;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1 },
-      });
+      const opened = await openMicrophone();
+      stream = opened.stream;
       if (!mounted.current) {
         stream.getTracks().forEach((t) => t.stop());
         return;
@@ -152,6 +152,17 @@ export function useRecorder(
             const wav = encodeWav(r.chunks, r.context.sampleRate);
             const file = new File([wav], "capture-" + Date.now() + ".wav", {
               type: "audio/wav",
+            });
+            const frames = r.chunks.reduce(
+              (total, chunk) => total + chunk.length,
+              0,
+            );
+            rememberCapture(file, {
+              ...opened.capture,
+              audioContextSampleRate: r.context.sampleRate,
+              wavSampleRate: r.context.sampleRate,
+              frames,
+              durationSeconds: frames / r.context.sampleRate,
             });
             cleanup();
             reset();

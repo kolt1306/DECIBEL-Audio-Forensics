@@ -38,11 +38,12 @@ import {
   type Health,
 } from "./lib/api";
 import { useRecorder } from "./hooks/useRecorder";
+import { captureFor } from "./lib/microphone";
 
 const verdicts = {
-  real: "Real voice",
-  possible_deepfake: "Possible deepfake",
-  deepfake: "Deepfake detected",
+  real: "Low model suspicion",
+  possible_deepfake: "Moderate model suspicion",
+  deepfake: "High model suspicion",
 };
 export default function App() {
   const reduced = useReducedMotion();
@@ -150,6 +151,7 @@ export default function App() {
   const recorder = useRecorder((file) => {
     void selectFile(file);
   }, setError);
+  const capture = captureFor(signal?.file);
   const busy = analyzing || loading || recorder.recording || recorder.starting;
   const clear = () => {
     if (busy) return;
@@ -466,6 +468,28 @@ export default function App() {
               : "TIME DOMAIN / AMPLITUDE"}
           </span>
         </div>
+        {capture && signal && (
+          <details className="capture-diagnostics">
+            <summary>
+              Microphone capture settings
+              {capture.warnings.length ? " · verification warnings" : ""}
+            </summary>
+            <p>
+              Mono PCM16 WAV · {capture.wavSampleRate} Hz ·{" "}
+              {capture.durationSeconds?.toFixed(2)}s. Browser settings describe
+              browser processing; hardware processing may still apply.
+            </p>
+            <ul>
+              {capture.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+            <pre>{JSON.stringify(capture, null, 2)}</pre>
+            <a href={signal.url} download={signal.file.name}>
+              Save captured WAV
+            </a>
+          </details>
+        )}
         <div className="input-controls">
           <div className="capture-controls">
             <input
@@ -803,7 +827,7 @@ export default function App() {
                 <span>
                   PEAK SEGMENT
                   <br />
-                  DEEPFAKE PROBABILITY
+                  MODEL-ESTIMATED DEEPFAKE PROBABILITY
                 </span>
               </div>
               <RiskScale probability={result.fake_probability} />
@@ -849,6 +873,7 @@ export default function App() {
           key={result.analysis_id}
           result={result}
           comparison={comparison}
+          capture={capture}
           onMode={setResult}
           onRegion={seekRegion}
           onError={setError}
