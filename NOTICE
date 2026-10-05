@@ -1,0 +1,17 @@
+DECIBEL derives inference code and an unmodified trained classifier from
+TrueVoice: https://github.com/hyeminss11/true-voice-gemma4
+Reference revision: c4020a4e7a3480c0711a5754ba505a4d28bc5d26
+
+Copyright (c) 2026 Shiwon Oh (shiwoni), Hyemin Jeong (hyeminss11).
+The upstream MIT notice additionally lists Copyright (c) 2026 hmhmhm.
+Both original notices are preserved in licenses/.
+CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+
+Changes in DECIBEL: inference extracted from notebook into FastAPI modules;
+bounded upload/decoder validation; browser codec support; new React frontend,
+waveform rendering, microphone capture, API integration and visual design;
+long-audio segmentation, quality diagnostics, conservative application-level
+aggregation, region investigation, jobs/progress/cancellation, channel comparison,
+independent batch analysis and JSON reports. Classifier weights are unmodified.
+DECIBEL did not train the TrueVoice classifier. No endorsement is implied.
+Gemma model weights are downloaded separately under their own terms.

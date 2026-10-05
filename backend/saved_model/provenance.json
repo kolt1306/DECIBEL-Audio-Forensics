@@ -1,0 +1,10 @@
+{
+  "source_repository": "https://github.com/hyeminss11/true-voice-gemma4",
+  "source_revision": "c4020a4e7a3480c0711a5754ba505a4d28bc5d26",
+  "artifact": "classifier_head.pt",
+  "bytes": 1578541,
+  "sha256": "e03b8a117892977cca69b8d0083720c4ac7b2255d8bf2ef18a1688dd36da6106",
+  "model_id": "google/gemma-4-e4b-it",
+  "class_index": { "0": "real", "1": "deepfake" },
+  "note": "Verified artifact provenance, not training metadata. Upstream metadata.json contains binary checkpoint data."
+}
