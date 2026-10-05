@@ -19,9 +19,9 @@ def log_runtime_exception(message):
 
 
 def select_audio_dtype():
-    # BF16 matches the Gemma checkpoint and has FP32's exponent range.
-    # FP32 is a safe fallback; the measured tower also fits at this precision.
-    return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float32
+    # The original TrueVoice demo uses FP32 audio embeddings. The standalone
+    # tower fits in 8 GB at this precision; do not change its feature distribution.
+    return torch.float32
 
 
 def load_audio_tower(model_id, token, device, dtype):

@@ -24,7 +24,7 @@ class TinyTower(nn.Module):
 
 def test_dtype_policy(monkeypatch):
     monkeypatch.setattr(torch.cuda, 'is_bf16_supported', lambda: True)
-    assert module.select_audio_dtype() == torch.bfloat16
+    assert module.select_audio_dtype() == torch.float32
     monkeypatch.setattr(torch.cuda, 'is_bf16_supported', lambda: False)
     assert module.select_audio_dtype() == torch.float32
 
@@ -89,7 +89,7 @@ def test_direct_audio_loader(monkeypatch):
 def test_safe_initialization_failure(monkeypatch, caplog):
     import transformers
     monkeypatch.setattr(torch.cuda, 'is_available', lambda: True)
-    monkeypatch.setattr(module, 'select_audio_dtype', lambda: torch.bfloat16)
+    monkeypatch.setattr(module, 'select_audio_dtype', lambda: torch.float32)
     monkeypatch.setattr(config, 'HF_TOKEN', 'private-test-token')
     monkeypatch.setattr(transformers.AutoProcessor, 'from_pretrained', Mock(side_effect=RuntimeError('private-test-token failure')))
     runtime = module.ModelRuntime()
@@ -106,7 +106,7 @@ def test_runtime_load_head_unchanged(monkeypatch):
     import transformers
     monkeypatch.setattr(torch.cuda, 'is_available', lambda: True)
     monkeypatch.setattr(config, 'HF_TOKEN', 'private-test-token')
-    monkeypatch.setattr(module, 'select_audio_dtype', lambda: torch.bfloat16)
+    monkeypatch.setattr(module, 'select_audio_dtype', lambda: torch.float32)
     tower = TinyTower()
     # Real checkpoint expects 1536 output features. No GPU required in this test.
     tower.output_proj = nn.Linear(2, 1536)
@@ -119,7 +119,7 @@ def test_runtime_load_head_unchanged(monkeypatch):
     runtime = module.ModelRuntime()
     runtime.load()
     assert runtime.loaded and runtime.base_model is None
-    assert loader.call_args.args[2:] == (torch.device('cuda:0'), torch.bfloat16)
+    assert loader.call_args.args[2:] == (torch.device('cuda:0'), torch.float32)
     original = torch.load(config.CLASSIFIER_PATH, weights_only=True, map_location='cpu')
     for key, tensor in runtime.model.classifier.state_dict().items():
         torch.testing.assert_close(tensor, original[key], rtol=0, atol=0)
