@@ -3,6 +3,8 @@ uvicorn[standard]>=0.30,<1
 python-multipart>=0.0.18,<1
 torch>=2.6,<3
 torchaudio>=2.6,<3
+torchvision>=0.21,<1
+pillow>=10,<13
 librosa>=0.11,<1
 soundfile>=0.13,<1
 transformers @ git+https://github.com/huggingface/transformers.git@10502571152db764f244791b7054481a7f629801

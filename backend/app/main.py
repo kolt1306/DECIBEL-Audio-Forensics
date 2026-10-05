@@ -59,8 +59,8 @@ async def model_info():
         'segment_overlap_seconds': config.SEGMENT_OVERLAP_SECONDS,
         'max_upload_mb': config.MAX_UPLOAD_MB, 'max_audio_seconds': config.MAX_AUDIO_SECONDS,
         'max_batch_files': config.MAX_BATCH_FILES, 'runtime_device': 'cuda' if runtime.loaded else 'unavailable',
-        'runtime_precision': 'float32', 'model_fingerprint': config.MODEL_FINGERPRINT,
-        'classifier_sha256': config.CLASSIFIER_SHA256, 'ready': runtime.loaded}
+        'runtime_precision': runtime.precision, 'model_fingerprint': config.MODEL_FINGERPRINT,
+        'classifier_sha256': config.CLASSIFIER_SHA256, 'ready': runtime.loaded, **runtime.diagnostics()}
 
 
 async def read_upload(audio):
