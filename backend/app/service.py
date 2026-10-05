@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from time import perf_counter
 from uuid import uuid4
 from . import config
+from .model import log_runtime_exception
 from .audio import AudioError, decode_recording, prepare_audio
 from .aggregation import probability_statistics, suspicious_regions, timeline_distribution
 from .diagnostics import diagnose
@@ -49,7 +50,7 @@ def analyze_recording(data, runtime, phone_mode=False, compare=False, cancel=Non
     metadata = AnalysisMetadata(timestamp=datetime.now(timezone.utc).isoformat(), model_id=config.MODEL_ID,
         model_fingerprint=config.MODEL_FINGERPRINT, classifier_sha256=config.CLASSIFIER_SHA256,
         sample_rate=config.SAMPLE_RATE, segment_duration_seconds=config.MAX_SEGMENT_SECONDS,
-        segment_overlap_seconds=config.SEGMENT_OVERLAP_SECONDS, runtime_precision='float32')
+        segment_overlap_seconds=config.SEGMENT_OVERLAP_SECONDS, runtime_precision=getattr(runtime, 'precision', 'float32'))
 
     def run_mode(phone):
         nonlocal completed
@@ -74,6 +75,7 @@ def analyze_recording(data, runtime, phone_mode=False, compare=False, cancel=Non
                     real, fake = runtime.predict(chunk)
                     verdict = build_result(real, fake, len(chunk) / config.SAMPLE_RATE, phone)
                 except Exception:
+                    log_runtime_exception('Model inference failed')
                     raise AnalysisError('INFERENCE_FAILED', 'Model inference failed. Retry or inspect the server configuration.', 500) from None
                 inference_ms += (perf_counter() - extracting) * 1000
                 segment.real_probability, segment.fake_probability, segment.risk = real, fake, verdict.risk

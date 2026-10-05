@@ -21,7 +21,7 @@ Browser / React + TypeScript + Vite
 
 ## DECIBEL ENHANCEMENTS OVER TRUEVOICE
 
-**TrueVoice-derived:** `google/gemma-4-e4b-it`, the frozen audio tower, classifier architecture and unmodified trained weights, mono/16 kHz processing, torchaudio phone resampling, softmax class interpretation and 40%/70% thresholds. The actual notebook uses **float32**; DECIBEL preserves it, along with plain unmasked mean pooling and the processor's `<audio>` input.
+**TrueVoice-derived:** `google/gemma-4-e4b-it`, the frozen audio tower, classifier architecture and unmodified trained weights, mono/16 kHz processing, torchaudio phone resampling, softmax class interpretation and 40%/70% thresholds. The original notebook uses **float32**. DECIBEL keeps the classifier in FP32 and preserves plain unmasked mean pooling and the processor's `<audio>` input. The standalone audio tower uses BF16 on supported GPUs, with an explicit conversion of pooled features to FP32 before the head; unsupported BF16 devices use FP32. Reduced tower precision can slightly change probabilities; bitwise notebook equivalence is not claimed.
 
 **DECIBEL enhancements:** a modular FastAPI service; complete long-audio analysis; segment predictions; merged suspicious regions; peak-segment navigation; overlap-safe time distribution; audio quality diagnostics; one-time background model loading and readiness endpoints; GPU concurrency guard; structured errors; bounded request/decoder resources; UUIDs, fingerprints and timings; asynchronous jobs, real progress and cancellation; independent batch jobs; standard/phone comparison; waveform-aligned risk heatmap and region playback/looping; technical details, statistics, copy summary and JSON export; self-check and benchmark tools.
 
@@ -30,12 +30,12 @@ These additions improve the surrounding system. They do not retrain the classifi
 ## Hardware and access
 
 - Python 3.12 recommended; Node.js 22; Git.
-- CUDA-capable NVIDIA infrastructure and a matching CUDA-enabled PyTorch/torchaudio pair.
+- CUDA-capable NVIDIA infrastructure and matching CUDA-enabled torch, torchvision and torchaudio packages.
 - Hugging Face access to `google/gemma-4-e4b-it` and a read token in `HF_TOKEN`.
-- Significant RAM, disk cache and GPU memory. The original demo loads the **full multimodal model in float32**, not just the 1.58 MB head. Plan for tens of GB of memory; 48 GB VRAM is a sensible starting provision, not a verified minimum. Automatic device placement may offload to host memory. This is not a tiny CPU model, and no quantization or precision shortcut is used.
+- The audio tower has **304,824,608 parameters**: 1,219,298,432 bytes (1.136 GiB) in FP32 or 609,649,216 bytes (0.568 GiB) in FP16/BF16, excluding activations, buffers and CUDA workspaces. It fits on the verified 8 GB RTX 4060 Laptop GPU. DECIBEL loads `Gemma4AudioModel` directly from the checkpoint on `cuda:0`; it never constructs or retains the language/vision model and does not disk-offload inference. The shared Hugging Face checkpoint still requires about 16 GB of disk cache. No quantization is used.
 - FFmpeg **and FFprobe** on `PATH` for WebM/Opus browser capture, AAC/M4A and other codecs unsupported by libsndfile. WAV, FLAC and supported MP3 use soundfile directly.
 
-CPU-only installations can serve the application API and validate audio, but cannot classify. Gemma/model-loader dependencies remain necessary for actual inference. Transformers is pinned to Git commit `10502571152db764f244791b7054481a7f629801` because the notebook installs from Git for Gemma 4 support. This pin makes source reproducible; it is **not** a claim of GPU-runtime validation.
+CPU-only installations can serve the application API and validate audio, but cannot classify. Gemma/model-loader dependencies remain necessary for actual inference. Transformers is pinned to Git commit `10502571152db764f244791b7054481a7f629801` because the notebook installs from Git for Gemma 4 support. This pin makes source reproducible; runtime validation is recorded below.
 
 ## Backend setup
 
@@ -59,7 +59,7 @@ source .venv/bin/activate
 cp backend/.env.example backend/.env
 ```
 
-Install a matching CUDA PyTorch/torchaudio pair using the [official PyTorch selector](https://pytorch.org/get-started/locally/), then:
+Install a matching CUDA-enabled **torch, torchvision and torchaudio** set using the [official PyTorch selector](https://pytorch.org/get-started/locally/) before the backend requirements. Use all three versions from the same supported release and CUDA wheel index; general requirements intentionally do not hardcode a CUDA wheel URL. Pillow and torchvision are required by Gemma4Processor even for this audio workflow. Then:
 
 ```sh
 pip install -r backend/requirements.txt
@@ -195,7 +195,15 @@ npm run build
 
 Backend tests cover the original checksum/weight shapes, preprocessing and phone equivalence, validation, segmentation/overlap/short tails, aggregation, region merging, risk duration, diagnostics, config parsing, structured errors, readiness, queue bounds/cancellation, real unloaded-model failures and chunked upload limits. Tone fixtures test processing only; synthetic probabilities appear only in pure aggregation unit tests. They are never presented as classifier predictions. Frontend tests cover API failures/invalid responses and microphone cleanup/permission denial/unmount races.
 
-**MODEL RUNTIME NOT VERIFIED.** The implementation machine has an 8 GB RTX 4060 laptop GPU, no `HF_TOKEN`, and a CPU-only test PyTorch installation. Tests do not load Gemma or produce a fake successful inference. On suitable CUDA infrastructure with approved model access, run the backend, wait for readiness HTTP 200, then:
+**REAL GPU RUNTIME VERIFIED** on Windows with RTX 4060 Laptop 8 GB, CUDA-enabled PyTorch 2.11.0+cu130, torchvision 0.26.0+cu130, torchaudio 2.11.0+cu130, and the pinned Transformers revision. Public LibriSpeech speech completed through real Uvicorn async jobs, repeated sync analysis, standard/phone comparison, batch, and long-audio segmentation. Health/readiness remained HTTP 200 after inference. See [GPU verification report](GPU_VERIFICATION.md) for measured memory, utilization and latency. This verifies execution stability, not classifier accuracy.
+
+To repeat verification with your own real speech:
+
+```sh
+python backend/scripts/verify_gpu.py your-real-speech.wav --port 8000
+```
+
+The script owns and stops its test server, requires an unused port, and writes measured samples/results to `gpu-verification.json`. It never fabricates model scores. For an already running server, wait for readiness HTTP 200, then:
 
 ```sh
 curl -F "audio=@your-real-speech.wav" -F "phone_mode=false" http://localhost:8000/api/v1/analyze
